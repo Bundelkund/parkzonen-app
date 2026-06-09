@@ -25,11 +25,12 @@ const POINT_LAYER = 'parkzonen-point';
 const DEFAULT_CENTER: [number, number] = [13.405, 52.52];
 const DEFAULT_ZOOM = 11;
 
-// Calm semantic palette (shared with FEE in lib/fee.ts); emphasis darkens
-// the active bezirk / zone with darker tones of the paid hue.
-const COLOR_FREE = '#3aa873';
-const COLOR_CHEAP = '#e0ad44';
-const COLOR_PAID = '#dc564b';
+// Calm semantic palette graded to the real price spread (must mirror FEE.map
+// in lib/fee.ts). Emphasis darkens the active bezirk / zone.
+const COLOR_FREE = '#14b8a6'; // null / kostenlos
+const COLOR_LOW = '#3aa873'; // ~2 € günstig
+const COLOR_MID = '#e0ad44'; // ~3 € mittel
+const COLOR_HIGH = '#dc564b'; // 4 €+ teuer
 const COLOR_BEZIRK = '#b8443b'; // darker
 const COLOR_ZONE = '#7f2b22'; // darkest
 
@@ -37,9 +38,11 @@ const BASE_FILL: maplibregl.ExpressionSpecification = [
   'case',
   ['==', ['get', 'gebuehr'], null],
   COLOR_FREE,
-  ['<', ['to-number', ['get', 'gebuehr'], 0], 2.0],
-  COLOR_CHEAP,
-  COLOR_PAID,
+  ['<', ['to-number', ['get', 'gebuehr'], 0], 2.5],
+  COLOR_LOW,
+  ['<', ['to-number', ['get', 'gebuehr'], 0], 3.5],
+  COLOR_MID,
+  COLOR_HIGH,
 ];
 
 // Progressive emphasis: matching bezirk darker, the exact zone darkest.

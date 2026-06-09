@@ -1,6 +1,6 @@
 import { FEE, type FeeTier } from '@/lib/fee';
 
-const TIERS: FeeTier[] = ['free', 'cheap', 'paid'];
+const TIERS: FeeTier[] = ['low', 'mid', 'high'];
 
 export default function Legend() {
   return (

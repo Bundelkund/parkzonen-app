@@ -7,8 +7,9 @@ export type FilterKey = 'all' | FeeTier;
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'Alle' },
   { key: 'free', label: 'Kostenlos' },
-  { key: 'cheap', label: 'Günstig' },
-  { key: 'paid', label: 'Teuer' },
+  { key: 'low', label: 'Günstig' },
+  { key: 'mid', label: 'Mittel' },
+  { key: 'high', label: 'Teuer' },
 ];
 
 interface FilterChipsProps {

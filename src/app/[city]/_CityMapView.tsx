@@ -82,7 +82,7 @@ export default function CityMapView({ children, initialBbox, zones }: CityMapVie
   }, [activeBezirkSlug, activeZoneId]);
 
   const counts = useMemo(() => {
-    const c: Record<FilterKey, number> = { all: zones.length, free: 0, cheap: 0, paid: 0 };
+    const c: Record<FilterKey, number> = { all: zones.length, free: 0, low: 0, mid: 0, high: 0 };
     zones.forEach((z) => {
       c[feeTier(z.gebuehr)]++;
     });
