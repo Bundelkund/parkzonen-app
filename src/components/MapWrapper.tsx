@@ -7,6 +7,7 @@ interface ZoneMapProps {
   center?: [number, number];
   initialZoom?: number;
   selectedZoneId?: number;
+  flyTo?: { lng: number; lat: number } | null;
   onZoneClick?: (zone: { id: number; properties: Record<string, unknown> }) => void;
 }
 

@@ -13,6 +13,7 @@ export interface CityMapViewProps {
 
 export default function CityMapView({ children, initialBbox }: CityMapViewProps) {
   const [selectedZone, setSelectedZone] = useState<ParkZone | null>(null);
+  const [flyTo, setFlyTo] = useState<{ lng: number; lat: number } | null>(null);
 
   function handleZoneClick(zone: { id: number; properties: Record<string, unknown> }) {
     const props = zone.properties;
@@ -29,8 +30,8 @@ export default function CityMapView({ children, initialBbox }: CityMapViewProps)
   }
 
   function handleSearchSelect(suggestion: AutocompleteSuggestion) {
-    // Future: fly map to suggestion coordinates using a map ref
-    console.log('Address selected:', suggestion.display_name, suggestion.lat, suggestion.lng);
+    // New object each time so repeat-selecting the same address re-triggers flyTo.
+    setFlyTo({ lng: suggestion.lng, lat: suggestion.lat });
   }
 
   return (
@@ -59,7 +60,7 @@ export default function CityMapView({ children, initialBbox }: CityMapViewProps)
 
       {/* Map */}
       <div className="h-[60vh] md:h-auto md:w-[70%] md:flex-1">
-        <MapWrapper initialBbox={initialBbox} onZoneClick={handleZoneClick} />
+        <MapWrapper initialBbox={initialBbox} flyTo={flyTo} onZoneClick={handleZoneClick} />
       </div>
 
       {/* Mobile: bottom sheet */}

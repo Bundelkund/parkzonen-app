@@ -9,11 +9,12 @@ interface ZoneMapProps {
   center?: [number, number];
   initialZoom?: number;
   selectedZoneId?: number;
+  flyTo?: { lng: number; lat: number } | null;
   onZoneClick?: (zone: { id: number; properties: Record<string, unknown> }) => void;
 }
 
 const SOURCE_ID = 'parkzonen';
-const SOURCE_LAYER = 'parkzonen';
+const GEOJSON_URL = '/data/berlin.geojson';
 const FILL_LAYER = 'parkzonen-fill';
 const LINE_LAYER = 'parkzonen-line';
 
@@ -25,6 +26,7 @@ export default function ZoneMapMapLibre({
   center,
   initialZoom,
   selectedZoneId,
+  flyTo,
   onZoneClick,
 }: ZoneMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,7 @@ export default function ZoneMapMapLibre({
     const map = mapRef.current;
     if (!map || selectedIdRef.current === null) return;
     map.setFeatureState(
-      { source: SOURCE_ID, sourceLayer: SOURCE_LAYER, id: selectedIdRef.current },
+      { source: SOURCE_ID, id: selectedIdRef.current },
       { selected: false },
     );
     selectedIdRef.current = null;
@@ -46,7 +48,7 @@ export default function ZoneMapMapLibre({
     if (!map) return;
     clearSelection();
     map.setFeatureState(
-      { source: SOURCE_ID, sourceLayer: SOURCE_LAYER, id },
+      { source: SOURCE_ID, id },
       { selected: true },
     );
     selectedIdRef.current = id;
@@ -66,12 +68,10 @@ export default function ZoneMapMapLibre({
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
-      // Add Martin vector tile source
+      // Static baked GeoJSON source (numeric feature.id for setFeatureState)
       map.addSource(SOURCE_ID, {
-        type: 'vector',
-        tiles: ['https://tiles.parkzonen.de/parkzonen/{z}/{x}/{y}.mvt'],
-        minzoom: 10,
-        maxzoom: 18,
+        type: 'geojson',
+        data: GEOJSON_URL,
       });
 
       // Fill layer — colored polygons with data-driven color
@@ -79,7 +79,6 @@ export default function ZoneMapMapLibre({
         id: FILL_LAYER,
         type: 'fill',
         source: SOURCE_ID,
-        'source-layer': SOURCE_LAYER,
         paint: {
           'fill-color': [
             'case',
@@ -103,7 +102,6 @@ export default function ZoneMapMapLibre({
         id: LINE_LAYER,
         type: 'line',
         source: SOURCE_ID,
-        'source-layer': SOURCE_LAYER,
         paint: {
           'line-color': '#ffffff',
           'line-width': 1,
@@ -171,6 +169,13 @@ export default function ZoneMapMapLibre({
       clearSelection();
     }
   }, [selectedZoneId, setSelection, clearSelection]);
+
+  // Fly to address selection (slice-4: AddressSearch -> handleSearchSelect)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !flyTo) return;
+    map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 16, speed: 1.2 });
+  }, [flyTo]);
 
   return (
     <div
