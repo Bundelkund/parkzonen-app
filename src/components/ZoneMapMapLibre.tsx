@@ -23,12 +23,13 @@ const LINE_LAYER = 'parkzonen-line';
 const DEFAULT_CENTER: [number, number] = [13.405, 52.52];
 const DEFAULT_ZOOM = 11;
 
-// Base palette by gebuehr; emphasis darkens the active bezirk / zone.
-const COLOR_FREE = '#10B981';
-const COLOR_CHEAP = '#F59E0B';
-const COLOR_PAID = '#EF4444';
-const COLOR_BEZIRK = '#B91C1C'; // red-700, darker
-const COLOR_ZONE = '#7F1D1D'; // red-900, darkest
+// Calm semantic palette (shared with FEE in lib/fee.ts); emphasis darkens
+// the active bezirk / zone with darker tones of the paid hue.
+const COLOR_FREE = '#3aa873';
+const COLOR_CHEAP = '#e0ad44';
+const COLOR_PAID = '#dc564b';
+const COLOR_BEZIRK = '#b8443b'; // darker
+const COLOR_ZONE = '#7f2b22'; // darkest
 
 const BASE_FILL: maplibregl.ExpressionSpecification = [
   'case',

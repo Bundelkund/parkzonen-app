@@ -1,71 +1,105 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import AddressSearch from '@/components/AddressSearch';
-import ZoneDetailsPanel from '@/components/ZoneDetailsPanel';
 import MapWrapper from '@/components/MapWrapper';
+import BottomSheet from '@/components/BottomSheet';
+import FilterChips, { type FilterKey } from '@/components/FilterChips';
+import ZoneCard from '@/components/ZoneCard';
+import ZoneDetail from '@/components/ZoneDetail';
+import SearchOverlay from '@/components/SearchOverlay';
+import { feeTier } from '@/lib/fee';
 import type { ParkZone, AutocompleteSuggestion } from '@/types/zone';
 
 export interface CityMapViewProps {
   children: React.ReactNode;
   initialBbox: [number, number, number, number];
+  zones: ParkZone[];
 }
 
-export default function CityMapView({ children, initialBbox }: CityMapViewProps) {
+function zoneCenter(z: ParkZone): { lng: number; lat: number } | null {
+  if (!z.bbox) return null;
+  return { lng: (z.bbox[0] + z.bbox[2]) / 2, lat: (z.bbox[1] + z.bbox[3]) / 2 };
+}
+
+// Variant A — "Karte zuerst": fullscreen map + floating search + bottom sheet.
+export default function CityMapView({ children, initialBbox, zones }: CityMapViewProps) {
+  const [filter, setFilter] = useState<FilterKey>('all');
   const [selectedZone, setSelectedZone] = useState<ParkZone | null>(null);
   const [flyTo, setFlyTo] = useState<{ lng: number; lat: number } | null>(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  // Route-driven emphasis: /[city]/[bezirk]/[zone] -> darken matching polygons.
+  // Route-driven emphasis + deep-link preselect (/[city]/[bezirk]/[zone]).
   const segments = usePathname().split('/').filter(Boolean);
   const activeBezirkSlug = segments[1];
   const activeZoneId = segments[2];
 
-  function handleZoneClick(zone: { id: number; properties: Record<string, unknown> }) {
-    const props = zone.properties;
-    const mapped: ParkZone = {
-      zone_id: String(props.zone_id ?? zone.id),
-      name: String(props.name ?? ''),
-      bezirk: String(props.bezirk ?? ''),
-      bezirk_slug: String(props.bezirk_slug ?? ''),
-      gebuehr: props.gebuehr != null ? String(props.gebuehr) : null,
-      zeiten: String(props.zeiten ?? ''),
-      besonderheiten: props.besonderheiten != null ? String(props.besonderheiten) : null,
-    };
-    setSelectedZone(mapped);
+  useEffect(() => {
+    if (!activeZoneId) return;
+    const z = zones.find(
+      (z) => z.bezirk_slug === activeBezirkSlug && z.zone_id === activeZoneId,
+    );
+    if (z) {
+      setSelectedZone(z);
+      const c = zoneCenter(z);
+      if (c) setFlyTo(c);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBezirkSlug, activeZoneId]);
+
+  const counts = useMemo(() => {
+    const c: Record<FilterKey, number> = { all: zones.length, free: 0, cheap: 0, paid: 0 };
+    zones.forEach((z) => {
+      c[feeTier(z.gebuehr)]++;
+    });
+    return c;
+  }, [zones]);
+
+  const list = useMemo(
+    () => (filter === 'all' ? zones : zones.filter((z) => feeTier(z.gebuehr) === filter)),
+    [filter, zones],
+  );
+
+  function selectZone(z: ParkZone) {
+    setSelectedZone(z);
+    const c = zoneCenter(z);
+    if (c) setFlyTo(c);
+    setSheetExpanded(true);
   }
 
-  function handleSearchSelect(suggestion: AutocompleteSuggestion) {
-    // New object each time so repeat-selecting the same address re-triggers flyTo.
-    setFlyTo({ lng: suggestion.lng, lat: suggestion.lat });
+  function handleZoneClick(zone: { id: number; properties: Record<string, unknown> }) {
+    const p = zone.properties;
+    setSelectedZone({
+      zone_id: String(p.zone_id ?? zone.id),
+      name: String(p.name ?? ''),
+      bezirk: String(p.bezirk ?? ''),
+      bezirk_slug: String(p.bezirk_slug ?? ''),
+      gebuehr: p.gebuehr != null ? String(p.gebuehr) : null,
+      zeiten: String(p.zeiten ?? ''),
+      besonderheiten: p.besonderheiten != null ? String(p.besonderheiten) : null,
+    });
+    setSheetExpanded(true);
+  }
+
+  function handleAddressSelect(s: AutocompleteSuggestion) {
+    setFlyTo({ lng: s.lng, lat: s.lat });
+    setSearchOpen(false);
+  }
+
+  function locate() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((pos) =>
+      setFlyTo({ lng: pos.coords.longitude, lat: pos.coords.latitude }),
+    );
   }
 
   return (
-    <div className="flex flex-col flex-1 md:flex-row md:h-dvh">
-      {/* Sidebar */}
-      <div className="relative z-10 md:w-[30%] md:min-w-[320px] md:overflow-y-auto bg-white md:shadow-lg flex flex-col">
-        <div className="p-4 border-b border-slate-100">
-          <AddressSearch
-            onSelect={handleSearchSelect}
-            placeholder="Adresse suchen..."
-            className="w-full"
-          />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {children}
-        </div>
-        {/* Desktop: panel inline at sidebar bottom */}
-        <div className="hidden md:block">
-          <ZoneDetailsPanel
-            zone={selectedZone}
-            isOpen={selectedZone !== null}
-            onClose={() => setSelectedZone(null)}
-          />
-        </div>
-      </div>
+    <div className="relative flex-1">
+      {/* SEO / no-JS fallback: server-rendered route content */}
+      <div className="sr-only">{children}</div>
 
-      {/* Map */}
-      <div className="h-[60vh] md:h-auto md:w-[70%] md:flex-1">
+      <div className="absolute inset-0">
         <MapWrapper
           initialBbox={initialBbox}
           flyTo={flyTo}
@@ -75,14 +109,74 @@ export default function CityMapView({ children, initialBbox }: CityMapViewProps)
         />
       </div>
 
-      {/* Mobile: bottom sheet */}
-      <div className="md:hidden">
-        <ZoneDetailsPanel
-          zone={selectedZone}
-          isOpen={selectedZone !== null}
-          onClose={() => setSelectedZone(null)}
-        />
+      {/* Floating search + locate */}
+      <div className="absolute inset-x-3.5 top-3.5 z-20 flex gap-2.5">
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="flex h-[46px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-white/90 px-3.5 text-left shadow-[0_2px_10px_rgba(20,25,35,0.08)] backdrop-blur-md"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" className="text-slate-400">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.75" />
+            <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          </svg>
+          <span className="text-[15px] text-slate-400">Adresse oder Zone suchen…</span>
+        </button>
+        <button
+          onClick={locate}
+          aria-label="Mein Standort"
+          className="flex h-[46px] w-[46px] items-center justify-center rounded-xl border border-slate-200 bg-white/90 shadow-[0_2px_10px_rgba(20,25,35,0.08)] backdrop-blur-md"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-slate-900">
+            <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.75" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            <circle cx="12" cy="12" r="2" fill="currentColor" />
+          </svg>
+        </button>
       </div>
+
+      <BottomSheet
+        expanded={selectedZone ? true : sheetExpanded}
+        setExpanded={setSheetExpanded}
+        peek={280}
+      >
+        {selectedZone ? (
+          <div className="overflow-y-auto px-[18px] pb-7 pt-1">
+            <ZoneDetail
+              zone={selectedZone}
+              onBack={() => setSelectedZone(null)}
+              onShowMap={() => setSheetExpanded(false)}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="shrink-0 px-4 pb-3 pt-0.5">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h1 className="m-0 text-lg font-bold tracking-[-0.4px] text-slate-900">
+                  Parkzonen Berlin
+                </h1>
+                <span className="font-mono text-[13px] text-slate-500">{list.length} Zonen</span>
+              </div>
+              <FilterChips value={filter} onChange={setFilter} counts={counts} />
+            </div>
+            <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-6 pt-0.5">
+              {list.map((z) => (
+                <ZoneCard key={z.zone_id} zone={z} onSelect={selectZone} />
+              ))}
+            </div>
+          </>
+        )}
+      </BottomSheet>
+
+      <SearchOverlay
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        zones={zones}
+        onZoneSelect={(z) => {
+          selectZone(z);
+          setSearchOpen(false);
+        }}
+        onAddressSelect={handleAddressSelect}
+      />
     </div>
   );
 }

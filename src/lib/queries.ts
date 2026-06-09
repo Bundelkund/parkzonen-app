@@ -126,6 +126,12 @@ export async function getBezirkBySlug(
   return bezirke.find((b) => b.slug === bezirkSlug) ?? null;
 }
 
+export async function getZonesByStadt(citySlug: string): Promise<ParkZone[]> {
+  return loadFeatures()
+    .filter((f) => f.properties.city_slug === citySlug)
+    .map(toZone);
+}
+
 export async function getZonesByBezirk(
   citySlug: string,
   bezirkSlug: string,

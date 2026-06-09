@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getStadtBySlug } from '@/lib/queries';
+import { getStadtBySlug, getZonesByStadt } from '@/lib/queries';
 import SchemaOrg from '@/components/SchemaOrg';
 import CityMapView from './_CityMapView';
 
@@ -11,7 +11,10 @@ export default async function CityLayout({
   params: Promise<{ city: string }>;
 }) {
   const { city } = await params;
-  const stadt = await getStadtBySlug(city);
+  const [stadt, zones] = await Promise.all([
+    getStadtBySlug(city),
+    getZonesByStadt(city),
+  ]);
 
   if (!stadt) {
     notFound();
@@ -25,7 +28,7 @@ export default async function CityLayout({
         description={`Alle Parkzonen und Parkgebuehren in ${stadt.name} nach Bezirk.`}
         url={`https://parkzonen.de/${city}`}
       />
-      <CityMapView initialBbox={stadt.bbox}>
+      <CityMapView initialBbox={stadt.bbox} zones={zones}>
         {children}
       </CityMapView>
     </>
