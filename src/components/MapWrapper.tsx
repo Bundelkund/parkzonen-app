@@ -8,6 +8,8 @@ interface ZoneMapProps {
   initialZoom?: number;
   selectedZoneId?: number;
   flyTo?: { lng: number; lat: number } | null;
+  activeBezirkSlug?: string;
+  activeZoneId?: string;
   onZoneClick?: (zone: { id: number; properties: Record<string, unknown> }) => void;
 }
 

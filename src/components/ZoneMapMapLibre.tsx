@@ -10,6 +10,8 @@ interface ZoneMapProps {
   initialZoom?: number;
   selectedZoneId?: number;
   flyTo?: { lng: number; lat: number } | null;
+  activeBezirkSlug?: string;
+  activeZoneId?: string;
   onZoneClick?: (zone: { id: number; properties: Record<string, unknown> }) => void;
 }
 
@@ -21,12 +23,61 @@ const LINE_LAYER = 'parkzonen-line';
 const DEFAULT_CENTER: [number, number] = [13.405, 52.52];
 const DEFAULT_ZOOM = 11;
 
+// Base palette by gebuehr; emphasis darkens the active bezirk / zone.
+const COLOR_FREE = '#10B981';
+const COLOR_CHEAP = '#F59E0B';
+const COLOR_PAID = '#EF4444';
+const COLOR_BEZIRK = '#B91C1C'; // red-700, darker
+const COLOR_ZONE = '#7F1D1D'; // red-900, darkest
+
+const BASE_FILL: maplibregl.ExpressionSpecification = [
+  'case',
+  ['==', ['get', 'gebuehr'], null],
+  COLOR_FREE,
+  ['<', ['to-number', ['get', 'gebuehr'], 0], 2.0],
+  COLOR_CHEAP,
+  COLOR_PAID,
+];
+
+// Progressive emphasis: matching bezirk darker, the exact zone darkest.
+function buildFillColor(
+  bezirkSlug?: string,
+  zoneId?: string,
+): maplibregl.ExpressionSpecification {
+  if (!bezirkSlug) return BASE_FILL;
+  const expr: unknown[] = ['case'];
+  if (zoneId) {
+    expr.push(
+      ['all', ['==', ['get', 'bezirk_slug'], bezirkSlug], ['==', ['get', 'zone_id'], zoneId]],
+      COLOR_ZONE,
+    );
+  }
+  expr.push(['==', ['get', 'bezirk_slug'], bezirkSlug], COLOR_BEZIRK);
+  expr.push(BASE_FILL);
+  return expr as unknown as maplibregl.ExpressionSpecification;
+}
+
+// Extend bounds over a Polygon / MultiPolygon geometry's coordinates.
+function extendBounds(bounds: maplibregl.LngLatBounds, geometry: GeoJSON.Geometry): void {
+  if (!('coordinates' in geometry)) return;
+  const walk = (c: unknown): void => {
+    if (Array.isArray(c) && typeof c[0] === 'number') {
+      bounds.extend(c as [number, number]);
+    } else if (Array.isArray(c)) {
+      c.forEach(walk);
+    }
+  };
+  walk(geometry.coordinates);
+}
+
 export default function ZoneMapMapLibre({
   initialBbox,
   center,
   initialZoom,
   selectedZoneId,
   flyTo,
+  activeBezirkSlug,
+  activeZoneId,
   onZoneClick,
 }: ZoneMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,14 +131,7 @@ export default function ZoneMapMapLibre({
         type: 'fill',
         source: SOURCE_ID,
         paint: {
-          'fill-color': [
-            'case',
-            ['==', ['get', 'gebuehr'], null],
-            '#10B981',
-            ['<', ['to-number', ['get', 'gebuehr']], 2.0],
-            '#F59E0B',
-            '#EF4444',
-          ],
+          'fill-color': buildFillColor(activeBezirkSlug, activeZoneId),
           'fill-opacity': [
             'case',
             ['boolean', ['feature-state', 'selected'], false],
@@ -176,6 +220,36 @@ export default function ZoneMapMapLibre({
     if (!map || !flyTo) return;
     map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 16, speed: 1.2 });
   }, [flyTo]);
+
+  // Route-driven emphasis: recolor + fit when active bezirk/zone changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const apply = () => {
+      if (!map.getLayer(FILL_LAYER)) return;
+      map.setPaintProperty(FILL_LAYER, 'fill-color', buildFillColor(activeBezirkSlug, activeZoneId));
+
+      if (!activeBezirkSlug) return;
+      const filter = activeZoneId
+        ? ['all',
+            ['==', ['get', 'bezirk_slug'], activeBezirkSlug],
+            ['==', ['get', 'zone_id'], activeZoneId]]
+        : ['==', ['get', 'bezirk_slug'], activeBezirkSlug];
+      const feats = map.querySourceFeatures(SOURCE_ID, {
+        filter: filter as maplibregl.FilterSpecification,
+      });
+      if (!feats.length) return;
+      const bounds = new maplibregl.LngLatBounds();
+      for (const f of feats) extendBounds(bounds, f.geometry);
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 60, maxZoom: activeZoneId ? 16 : 13.5 });
+      }
+    };
+
+    if (map.isStyleLoaded() && map.getLayer(FILL_LAYER)) apply();
+    else map.once('idle', apply);
+  }, [activeBezirkSlug, activeZoneId]);
 
   return (
     <div

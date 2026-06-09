@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import AddressSearch from '@/components/AddressSearch';
 import ZoneDetailsPanel from '@/components/ZoneDetailsPanel';
 import MapWrapper from '@/components/MapWrapper';
@@ -14,6 +15,11 @@ export interface CityMapViewProps {
 export default function CityMapView({ children, initialBbox }: CityMapViewProps) {
   const [selectedZone, setSelectedZone] = useState<ParkZone | null>(null);
   const [flyTo, setFlyTo] = useState<{ lng: number; lat: number } | null>(null);
+
+  // Route-driven emphasis: /[city]/[bezirk]/[zone] -> darken matching polygons.
+  const segments = usePathname().split('/').filter(Boolean);
+  const activeBezirkSlug = segments[1];
+  const activeZoneId = segments[2];
 
   function handleZoneClick(zone: { id: number; properties: Record<string, unknown> }) {
     const props = zone.properties;
@@ -60,7 +66,13 @@ export default function CityMapView({ children, initialBbox }: CityMapViewProps)
 
       {/* Map */}
       <div className="h-[60vh] md:h-auto md:w-[70%] md:flex-1">
-        <MapWrapper initialBbox={initialBbox} flyTo={flyTo} onZoneClick={handleZoneClick} />
+        <MapWrapper
+          initialBbox={initialBbox}
+          flyTo={flyTo}
+          activeBezirkSlug={activeBezirkSlug}
+          activeZoneId={activeZoneId}
+          onZoneClick={handleZoneClick}
+        />
       </div>
 
       {/* Mobile: bottom sheet */}
