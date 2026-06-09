@@ -70,6 +70,7 @@ function unionBbox(features: BakedFeature[]): BBox {
 function toZone(f: BakedFeature): ParkZone {
   const p = f.properties;
   return {
+    id: f.id,
     zone_id: p.zone_id,
     name: p.name,
     bezirk: p.bezirk,

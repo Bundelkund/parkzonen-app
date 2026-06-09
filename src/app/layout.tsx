@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+
+const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
 
 export const metadata: Metadata = {
   title: 'Parkzonen Deutschland — Gebuehren, Zeiten & kostenloses Parken',
@@ -13,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de" className="h-full antialiased">
+    <html lang="de" className={`h-full antialiased ${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-dvh flex flex-col bg-slate-50 font-sans">
         {children}
       </body>

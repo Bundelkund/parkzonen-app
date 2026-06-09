@@ -16,9 +16,11 @@ interface ZoneMapProps {
 }
 
 const SOURCE_ID = 'parkzonen';
+const POINTS_ID = 'parkzonen-points';
 const GEOJSON_URL = '/data/berlin.geojson';
 const FILL_LAYER = 'parkzonen-fill';
 const LINE_LAYER = 'parkzonen-line';
+const POINT_LAYER = 'parkzonen-point';
 
 const DEFAULT_CENTER: [number, number] = [13.405, 52.52];
 const DEFAULT_ZOOM = 11;
@@ -71,6 +73,27 @@ function extendBounds(bounds: maplibregl.LngLatBounds, geometry: GeoJSON.Geometr
   walk(geometry.coordinates);
 }
 
+// bbox-center of a geometry (cheap centroid for point markers).
+function centroidOf(geometry: GeoJSON.Geometry): [number, number] {
+  const b = new maplibregl.LngLatBounds();
+  extendBounds(b, geometry);
+  const c = b.getCenter();
+  return [c.lng, c.lat];
+}
+
+// Build a point FeatureCollection (one centroid per zone, id + gebuehr kept).
+function buildCentroids(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: fc.features.map((f) => ({
+      type: 'Feature',
+      id: f.id,
+      geometry: { type: 'Point', coordinates: centroidOf(f.geometry) },
+      properties: f.properties ?? {},
+    })),
+  };
+}
+
 export default function ZoneMapMapLibre({
   initialBbox,
   center,
@@ -85,26 +108,28 @@ export default function ZoneMapMapLibre({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const selectedIdRef = useRef<number | null>(null);
 
+  // Toggle 'selected' state on both the polygon and the point source.
+  const setState = useCallback((map: maplibregl.Map, id: number, selected: boolean) => {
+    map.setFeatureState({ source: SOURCE_ID, id }, { selected });
+    if (map.getSource(POINTS_ID)) {
+      map.setFeatureState({ source: POINTS_ID, id }, { selected });
+    }
+  }, []);
+
   const clearSelection = useCallback(() => {
     const map = mapRef.current;
     if (!map || selectedIdRef.current === null) return;
-    map.setFeatureState(
-      { source: SOURCE_ID, id: selectedIdRef.current },
-      { selected: false },
-    );
+    setState(map, selectedIdRef.current, false);
     selectedIdRef.current = null;
-  }, []);
+  }, [setState]);
 
   const setSelection = useCallback((id: number) => {
     const map = mapRef.current;
     if (!map) return;
     clearSelection();
-    map.setFeatureState(
-      { source: SOURCE_ID, id },
-      { selected: true },
-    );
+    setState(map, id, true);
     selectedIdRef.current = id;
-  }, [clearSelection]);
+  }, [clearSelection, setState]);
 
   // Initialize map
   useEffect(() => {
@@ -152,6 +177,45 @@ export default function ZoneMapMapLibre({
           'line-width': 1,
         },
       });
+
+      // Centroid point markers (one per zone, colored by fee, grow when selected)
+      fetch(GEOJSON_URL)
+        .then((r) => r.json())
+        .then((fc: GeoJSON.FeatureCollection) => {
+          if (!mapRef.current || map.getSource(POINTS_ID)) return;
+          map.addSource(POINTS_ID, { type: 'geojson', data: buildCentroids(fc) });
+          map.addLayer({
+            id: POINT_LAYER,
+            type: 'circle',
+            source: POINTS_ID,
+            paint: {
+              'circle-radius': [
+                'case',
+                ['boolean', ['feature-state', 'selected'], false],
+                7,
+                4.5,
+              ],
+              'circle-color': BASE_FILL,
+              'circle-stroke-color': '#ffffff',
+              'circle-stroke-width': 1.5,
+            },
+          });
+          map.on('click', POINT_LAYER, (e) => {
+            if (!e.features?.length) return;
+            const f = e.features[0];
+            const id = f.id as number;
+            setSelection(id);
+            onZoneClick?.({ id, properties: f.properties as Record<string, unknown> });
+          });
+          map.on('mouseenter', POINT_LAYER, () => {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+          map.on('mouseleave', POINT_LAYER, () => {
+            map.getCanvas().style.cursor = '';
+          });
+          if (selectedIdRef.current !== null) setState(map, selectedIdRef.current, true);
+        })
+        .catch(() => {});
 
       // Fit to initial bbox if provided
       if (initialBbox) {

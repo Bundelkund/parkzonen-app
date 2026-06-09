@@ -1,4 +1,5 @@
 export interface ParkZone {
+  id?: number; // numeric feature id (map setFeatureState); optional for legacy callers
   zone_id: string;
   name: string;
   bezirk: string;
